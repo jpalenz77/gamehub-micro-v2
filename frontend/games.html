@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>GameHub Retro - Selección de Juegos</title>
+  <link rel="stylesheet" href="retro.css">
+  <link rel="stylesheet" href="./jsdos/js-dos.css">
+  <script src="./jsdos/js-dos.js"></script>
+  <script src="score-tracker.js"></script>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,
+  <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>
+    <circle cx='32' cy='32' r='24' fill='black' stroke='%2300ff88' stroke-width='4'>
+      <animate attributeName='stroke-opacity' values='1;0.3;1' dur='2s' repeatCount='indefinite'/>
+    </circle>
+  </svg>">
+</head>
+<body>
+  <header>
+    <h1>🎮 GameHub Retro</h1>
+    <button class="logout" id="logoutBtn">Salir</button>
+  </header>
+
+  <div class="game-select">
+    <div class="game-card">
+      <button class="game-btn" onclick="loadGame('doom')">▶️ Jugar DOOM</button>
+      <img src="img/doom-thumb.jpg" alt="DOOM" class="game-thumb" onclick="loadGame('doom')">
+    </div>
+    <div class="game-card">
+      <button class="game-btn" onclick="loadGame('wolf')">▶️ Jugar Wolfenstein 3D</button>
+      <img src="img/wolf-thumb.jpg" alt="Wolfenstein 3D" class="game-thumb" onclick="loadGame('wolf')">
+    </div>
+  </div>
+
+  <div id="loader"></div>
+  <div id="dosbox-container"></div>
+
+  <section id="ranking">
+    <h2>🏆 Clasificación de Jugadores - <span id="current-game">DOOM</span></h2>
+    <div class="ranking-tabs">
+      <button class="ranking-tab active" onclick="switchRanking('doom')">DOOM</button>
+      <button class="ranking-tab" onclick="switchRanking('wolf')">Wolfenstein 3D</button>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Posición</th><th>Jugador</th><th>Puntuación</th><th>Fecha</th></tr>
+      </thead>
+      <tbody id="ranking-body">
+        <tr><td colspan="4">Cargando ranking...</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="instructions">
+    <h2>🕹️ Controles</h2>
+    <ul>
+      <li><b>Movimiento:</b> Flechas o WASD</li>
+      <li><b>Disparar:</b> CTRL</li>
+      <li><b>Usar / Abrir puertas:</b> ESPACIO</li>
+      <li><b>Correr:</b> SHIFT (mantener)</li>
+      <li><b>Cambiar arma:</b> 1–7</li>
+      <li><b>Pantalla completa:</b> F11 o botón del juego</li>
+      <li><b>Ratón:</b> clic dentro del juego para capturarlo</li>
+    </ul>
+  </section>
+
+  <script>
+    const API = "http://localhost:8082/api";
+    const token = localStorage.getItem("token");
+    const username = localStorage.getItem("username");
+    const loader = document.getElementById("loader");
+    const container = document.getElementById("dosbox-container");
+    const rankingBody = document.getElementById("ranking-body");
+    let currentRankingGame = "doom";
+    let currentScoreSystem = null; // 🆕 Sistema de puntuación híbrido
+
+    if (!token) window.location.href = "./index.html";
+
+    // Cargar ranking inicial al abrir la página
+    loadRanking("doom");
+
+    document.getElementById("logoutBtn").onclick = () => {
+      localStorage.clear();
+      window.location.href = "./index.html";
+    };
+
+    async function saveScore(game, score) {
+      try {
+        const res = await fetch(`${API}/score`, {
+          method: "POST",
+          headers: {"Content-Type":"application/json","Authorization":`Bearer ${token}`},
+          body: JSON.stringify({game, score})
+        });
+        const data = await res.json();
+        console.log("Puntuación guardada:", data);
+        
+        // Actualizar el ranking después de guardar
+        await loadRanking(game);
+      } catch (err) {
+        console.error("Error al guardar puntuación:", err);
+      }
+    }
+
+    async function loadRanking(game) {
+      try {
+        currentRankingGame = game;
+        const res = await fetch(`${API}/scores/${game}`);
+        const data = await res.json();
+        
+        // Actualizar el título
+        document.getElementById("current-game").textContent = game === "doom" ? "DOOM" : "Wolfenstein 3D";
+        
+        // Actualizar las pestañas activas
+        document.querySelectorAll(".ranking-tab").forEach(tab => {
+          tab.classList.remove("active");
+        });
+        document.querySelector(`[onclick="switchRanking('${game}')"]`).classList.add("active");
+        
+        // Actualizar la tabla
+        rankingBody.innerHTML = "";
+        if (data.length === 0) {
+          rankingBody.innerHTML = '<tr><td colspan="4">No hay puntuaciones todavía</td></tr>';
+        } else {
+          data.forEach((r, index) => {
+            const position = index + 1;
+            const emoji = position === 1 ? "🥇" : position === 2 ? "🥈" : position === 3 ? "🥉" : position;
+            const rowClass = r.username === username ? 'class="my-score"' : '';
+            const date = new Date(r.created_at).toLocaleDateString('es-ES', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            });
+            rankingBody.innerHTML += `<tr ${rowClass}><td>${emoji}</td><td>${r.username}</td><td>${r.score}</td><td>${date}</td></tr>`;
+          });
+        }
+      } catch (err) {
+        console.error("Error al cargar ranking:", err);
+        rankingBody.innerHTML = '<tr><td colspan="4">Error al cargar el ranking</td></tr>';
+      }
+    }
+
+    function switchRanking(game) {
+      loadRanking(game);
+    }
+
+    async function loadGame(game) {
+      if (window.ciInstance && window.ciInstance.exit) {
+        try { await window.ciInstance.exit(); } catch {}
+      }
+      
+      // Limpiar tracker anterior si existe
+      if (currentScoreSystem) {
+        currentScoreSystem.destroy();
+      }
+      
+      container.style.display = "none";
+      loader.textContent = `Cargando ${game.toUpperCase()}...`;
+      const url = game === "doom" ? "./doom.jsdos" : "./wolf.jsdos";
+
+      // Cargar el ranking del juego que se va a jugar
+      await loadRanking(game);
+
+      try {
+        const ci = await Dos(container, {url, pathPrefix:"./jsdos/", mouseLock:true});
+        window.ciInstance = ci;
+        
+        // 🆕 Iniciar sistema híbrido de puntuación
+        currentScoreSystem = new HybridScoreSystem(game, ci);
+        console.log(`🎮 Tracking de puntuación iniciado para ${game.toUpperCase()}`);
+        
+        loader.textContent = "";
+        container.style.display = "block";
+
+        ci.exit = async () => {
+          console.log(`🏁 Juego terminado, calculando puntuación...`);
+          
+          // 🆕 Obtener puntuación (automática o manual según tiempo jugado)
+          const score = await currentScoreSystem.getFinalScore();
+          console.log(`📊 Puntuación final: ${score}`);
+          
+          await saveScore(game, score);
+          
+          // Limpiar sistema de puntuación
+          currentScoreSystem.destroy();
+          currentScoreSystem = null;
+        };
+      } catch (err) {
+        loader.textContent = "";
+        console.error("Error al cargar juego:", err);
+      }
+    }
+  </script>
+</body>
+</html>
