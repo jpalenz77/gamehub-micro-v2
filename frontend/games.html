@@ -124,12 +124,13 @@
             const position = index + 1;
             const emoji = position === 1 ? "🥇" : position === 2 ? "🥈" : position === 3 ? "🥉" : position;
             const rowClass = r.username === username ? 'class="my-score"' : '';
-            const date = new Date(r.created_at).toLocaleDateString('es-ES', {
+            const date = new Date(r.created_at).toLocaleString('es-ES', {
               day: '2-digit',
               month: '2-digit',
               year: 'numeric',
               hour: '2-digit',
-              minute: '2-digit'
+              minute: '2-digit',
+              timeZone: 'Europe/Madrid'
             });
             rankingBody.innerHTML += `<tr ${rowClass}><td>${emoji}</td><td>${r.username}</td><td>${r.score}</td><td>${date}</td></tr>`;
           });

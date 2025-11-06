@@ -35,7 +35,7 @@ let db;
       user_id INTEGER,
       game TEXT,
       score INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      created_at TEXT DEFAULT (datetime('now', 'localtime')),
       FOREIGN KEY(user_id) REFERENCES users(id)
     );
   `);
@@ -103,7 +103,7 @@ app.post("/api/score", authenticateToken, async (req, res) => {
     // Si la nueva puntuación es mayor, actualizarla
     if (score > existing.score) {
       await db.run(
-        "UPDATE scores SET score = ?, created_at = CURRENT_TIMESTAMP WHERE user_id = ? AND game = ?",
+        "UPDATE scores SET score = ?, created_at = datetime('now', 'localtime') WHERE user_id = ? AND game = ?",
         [score, userId, game]
       );
       console.log(`🎮 Puntuación actualizada: ${req.user.username} - ${game} - ${score} (anterior: ${existing.score})`);
