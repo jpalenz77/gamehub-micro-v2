@@ -1,0 +1,1 @@
+Este es el readme de gamehub, práctica final de la edición 12 del bootcamp de DevOps de KeepCoding
