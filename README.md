@@ -246,26 +246,3 @@ Si necesitas más, edita `infrastructure/kong/kong.yml`
 5. Abre un Pull Request
 
 ---
-
-## 📄 Licencia
-
-Este proyecto es una práctica educativa del Bootcamp DevOps de KeepCoding.
-
----
-
-## 👥 Autor
-
-**Jorge Palenzuela**
-- GitHub: [@jpalenz77](https://github.com/jpalenz77)
-
----
-
-## 🎉 Agradecimientos
-
-- **KeepCoding**: Por el bootcamp de DevOps
-- **js-dos**: Por el emulador de DOSBox
-- **Comunidad Open Source**: Por las herramientas utilizadas
-
----
-
-**¡Disfruta jugando! 🎮🕹️**
