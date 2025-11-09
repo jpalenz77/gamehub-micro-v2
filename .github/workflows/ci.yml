@@ -173,7 +173,6 @@ jobs:
           build-args: ${{ matrix.image.build-args || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          load: ${{ github.event_name == 'pull_request' }}
 
   # Integration tests with Kubernetes
   integration-tests:
