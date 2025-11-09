@@ -85,12 +85,25 @@ Los resultados están disponibles en:
 
 ## 🔧 Configuración necesaria
 
+### Permisos de GITHUB_TOKEN
+
+**IMPORTANTE**: Antes de ejecutar los workflows, configura los permisos:
+
+1. Ve a: **Settings** > **Actions** > **General**
+2. Scroll hasta "**Workflow permissions**"
+3. Selecciona: **"Read and write permissions"**
+4. Marca: **"Allow GitHub Actions to create and approve pull requests"**
+5. Click **Save**
+
+Sin esto, el push de imágenes Docker fallará con error 403/denied.
+
 ### Secrets requeridos (GitHub Repository Settings)
 
-#### Para builds:
-- `GITHUB_TOKEN` (automático)
+#### Para CI con Docker Push a GHCR (GitHub Container Registry):
+- `GITHUB_TOKEN` - **Automático** (no requiere configuración manual)
+  - Solo asegúrate de tener "Read and write permissions" habilitado
 
-#### Para deployment a AWS EKS:
+#### Para deployment a AWS EKS (Opcional):
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
 - `AWS_REGION` (default: us-east-1)
@@ -98,6 +111,19 @@ Los resultados están disponibles en:
 
 #### Para Codecov (opcional):
 - `CODECOV_TOKEN`
+
+**📖 Guía detallada**: Ver [SECRETS_SETUP.md](../SECRETS_SETUP.md) para instrucciones completas.
+
+### Configurar permisos de GITHUB_TOKEN
+
+```bash
+# Via GitHub CLI
+gh api -X PATCH /repos/jpalenz77/gamehub_micro \
+  -f default_workflow_permissions='write' \
+  -F allow_actions_create_pull_requests=true
+```
+
+O manualmente en la UI (recomendado para primera vez).
 
 ### Environments
 
