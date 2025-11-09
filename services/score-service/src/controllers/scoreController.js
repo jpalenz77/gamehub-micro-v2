@@ -1,4 +1,5 @@
 import scoreService from '../services/scoreService.js';
+import { scoreSubmissionsTotal, lastScoreValue } from '../index.js';
 
 export class ScoreController {
   // POST /scores
@@ -13,6 +14,13 @@ export class ScoreController {
       }
 
       const result = await scoreService.saveScore(userId, username, game, score, metadata);
+
+      // Update Prometheus metrics
+      scoreSubmissionsTotal.labels(game, username).inc();
+      lastScoreValue.labels(game, username, userId.toString()).set(score);
+
+      // Log for monitoring
+      console.log(`🎮 New score: ${username} played ${game} and scored ${score} points`);
 
       res.json(result);
     } catch (error) {

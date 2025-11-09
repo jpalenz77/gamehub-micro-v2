@@ -10,99 +10,364 @@ GameHub es una plataforma de juegos retro basada en microservicios que permite a
 
 ### Stack Tecnológico
 
-- **Backend**: Node.js + Express (6 microservicios)
+- **Backend**: Node.js + Express (5 microservicios)
 - **Frontend**: HTML5 + JS-DOS (emulador de DOSBox en browser)
 - **Bases de Datos**: 
   - PostgreSQL 15 (auth, users, scores)
   - MongoDB 7 (game catalog)
   - Redis 7 (cache + event bus)
 - **API Gateway**: Kong 3.4 (DB-less mode)
-- **Monitoring**: Prometheus + Grafana
-- **Orquestación**: Docker Compose
+- **Monitoring**: Prometheus + Grafana + AlertManager
+- **Orquestación**: Docker Compose / Kubernetes
 
 ### Microservicios
 
 | Servicio | Puerto | Descripción | Base de Datos |
 |----------|--------|-------------|---------------|
-| **auth-service** | 3001 | Autenticación JWT | PostgreSQL (5432) |
-| **user-service** | 3002 | Gestión de usuarios | PostgreSQL (5433) |
-| **score-service** | 3003 | Puntuaciones | PostgreSQL (5434) |
-| **ranking-service** | 3004 | Rankings con cache | Redis (6379) |
-| **game-catalog-service** | 3005 | Catálogo de juegos | MongoDB (27017) |
-| **frontend** | 8081 | Aplicación web | nginx |
-| **games-cdn** | 8086 | CDN de archivos .jsdos | nginx |
+| **auth-service** | 3001 | Autenticación JWT | PostgreSQL |
+| **user-service** | 3002 | Gestión de usuarios | PostgreSQL |
+| **score-service** | 3003 | Puntuaciones y métricas | PostgreSQL |
+| **ranking-service** | 3004 | Rankings con cache | Redis |
+| **game-catalog-service** | 3005 | Catálogo de juegos | MongoDB |
+| **frontend** | 8000/8082 | Aplicación web | - |
 | **kong** | 8000 | API Gateway | - |
-| **prometheus** | 9090 | Métricas | - |
-| **grafana** | 3000 | Dashboards | - |
 
 ---
 
 ## 🚀 Inicio Rápido
 
-### Prerrequisitos
+### Opción 1: Docker Compose (Desarrollo Local)
 
-- Docker 24+
-- Docker Compose 2.20+
-- 4GB RAM disponible
-- Puertos disponibles: 3000, 3001-3005, 5432-5434, 6379, 8000, 8081, 8086, 9090, 27017
 
-### Instalación
+#### Prerrequisitos
+
+- Minikube 1.32+ o cluster Kubernetes
+- kubectl configurado
+- Helm 3+ (para monitoreo)
+- 8GB RAM disponible
+- Docker (para construir imágenes)
+
+#### Instalación
 
 ```bash
-# 1. Clonar el repositorio
-git clone https://github.com/jpalenz77/gamehub.git
-cd gamehub
+# 1. Iniciar Minikube con recursos suficientes
+minikube start --cpus=4 --memory=8192 --driver=docker
 
-# 2. Crear archivo .env (opcional, ya hay valores por defecto)
-cp .env.example .env
+# 2. Habilitar addons necesarios
+minikube addons enable ingress
+minikube addons enable metrics-server
 
-# 3. Levantar todos los servicios
-docker compose up -d
+# 3. Crear namespace y secrets
+kubectl apply -f infrastructure/kubernetes/namespace-and-secrets.yaml
 
-# 4. Esperar a que todos los servicios estén healthy (2-3 minutos)
-docker compose ps
+# 4. Construir imágenes de servicios
+cd services/auth-service && docker build -t gamehub-auth-service:latest .
+cd ../user-service && docker build -t gamehub-user-service:latest .
+cd ../score-service && docker build -t gamehub-score-service:latest .
+cd ../ranking-service && docker build -t gamehub-ranking-service:latest .
+cd ../game-catalog-service && docker build -t gamehub-game-catalog-service:latest .
+cd ../../frontend && docker build -f Dockerfile.microservices -t gamehub-frontend:latest .
 
-# 5. Verificar que todos los contenedores estén "Up" y "healthy"
+# 5. Cargar imágenes en Minikube
+minikube image load gamehub-auth-service:latest
+minikube image load gamehub-user-service:latest
+minikube image load gamehub-score-service:latest
+minikube image load gamehub-ranking-service:latest
+minikube image load gamehub-game-catalog-service:latest
+minikube image load gamehub-frontend:latest
+
+# 6. Desplegar servicios backend
+kubectl apply -f infrastructure/kubernetes/deployments/
+
+# 7. Desplegar Kong API Gateway
+kubectl apply -f infrastructure/kubernetes/games/kong-deployment.yaml
+
+# 8. Desplegar frontend y CDN
+kubectl apply -f infrastructure/kubernetes/games/frontend-production.yaml
+kubectl apply -f infrastructure/kubernetes/games/cdn-production.yaml
+
+# 9. Configurar ingress
+kubectl apply -f infrastructure/kubernetes/games/games-ingress.yaml
+
+# 10. Obtener IP del cluster
+minikube ip
+# Añadir a /etc/hosts: <MINIKUBE_IP> gamehub.local
 ```
 
-### Acceso
+#### Acceso en Kubernetes
 
-- **Frontend**: http://localhost:8081
-- **API Gateway**: http://localhost:8000
-- **Grafana**: http://localhost:3000 (admin/admin)
+```bash
+# Verificar que todos los pods estén Running
+kubectl get pods -n gamehub
+
+# Obtener URL del frontend
+echo "http://$(minikube ip):$(kubectl get svc frontend -n gamehub -o jsonpath='{.spec.ports[0].nodePort}')"
+
+# O usar port-forward
+kubectl port-forward -n gamehub svc/frontend 8080:80
+# Acceder en http://localhost:8080
+```
+
+---
+
+## 📊 Monitoring Stack (Helm)
+
+GameHub incluye un stack completo de monitoreo con Prometheus, Grafana y AlertManager, desplegado mediante Helm.
+
+### Componentes
+
+| Componente | Versión | Puerto | Descripción |
+|------------|---------|--------|-------------|
+| **Prometheus** | 2.x | 9090 | Recolección de métricas (7d retention, 10Gi storage) |
+| **Grafana** | 12.2.1 | 3000 | Visualización y dashboards (5Gi persistent storage) |
+| **AlertManager** | 0.29.0 | 9093 | Enrutamiento de alertas a Slack (5Gi storage) |
+
+### Instalación del Stack de Monitoreo
+
+```bash
+# 1. Añadir repositorio de Helm
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+# 2. Instalar kube-prometheus-stack
+cd monitoring
+helm install prometheus prometheus-community/kube-prometheus-stack \
+  --namespace monitoring \
+  --create-namespace \
+  --values helm/prometheus-values.yaml
+
+# 3. Esperar a que todos los pods estén Running (2-3 minutos)
+kubectl get pods -n monitoring -w
+
+# 4. Desplegar ServiceMonitors para scraping
+kubectl apply -f prometheus/servicemonitors/
+
+# 5. Desplegar reglas de alertas personalizadas
+kubectl apply -f prometheus/rules/
+
+# 6. Desplegar dashboard de Grafana
+kubectl apply -f grafana/dashboards/gamehub-gameplay-dashboard-configmap.yaml
+
+# 7. Configurar port-forwards para acceso local
+kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80 &
+kubectl port-forward -n monitoring svc/prometheus-prometheus 9090:9090 &
+kubectl port-forward -n monitoring svc/prometheus-alertmanager 9093:9093 &
+```
+
+### Acceso al Stack de Monitoreo
+
+- **Grafana**: http://localhost:3000
+  - Usuario: `admin`
+  - Contraseña: `admin123`
+  - Dashboard: http://localhost:3000/d/gamehub-gameplay
+
 - **Prometheus**: http://localhost:9090
+  - Targets: http://localhost:9090/targets
+  - Alerts: http://localhost:9090/alerts
+
+- **AlertManager**: http://localhost:9093
+  - Alerts: http://localhost:9093/#/alerts
+
+### Métricas Personalizadas
+
+El **score-service** expone métricas custom en el endpoint `/metrics`:
+
+| Métrica | Tipo | Labels | Descripción |
+|---------|------|--------|-------------|
+| `score_submissions_total` | Counter | `game`, `username` | Total de puntuaciones enviadas |
+| `last_score_value` | Gauge | `game`, `username`, `user_id` | Última puntuación registrada |
+
+**Ejemplo de consultas PromQL:**
+
+```promql
+# Tasa de puntuaciones por minuto
+rate(score_submissions_total[1m])
+
+# Puntuaciones por juego
+sum(rate(score_submissions_total[5m])) by (game)
+
+# Top 5 jugadores más activos
+topk(5, sum(score_submissions_total) by (username))
+
+# Puntuaciones mayores a 5000
+last_score_value > 5000
+```
+
+### Alertas Configuradas
+
+#### Alertas de Gameplay (monitoring/prometheus/rules/gamehub-gameplay-alerts.yaml)
+
+| Alerta | Condición | Severidad | Descripción |
+|--------|-----------|-----------|-------------|
+| **GameHubNewScore** | `increase(score_submissions_total[30s]) > 0` | warning | Se envió una nueva puntuación |
+| **GameHubHighScore** | `last_score_value > 5000` | warning | Puntuación mayor a 5000 |
+| **GameHubPersonalBest** | Score submission + high score | warning | Nuevo récord personal |
+| **GameHubActiveSession** | `sum(increase[5m]) > 3` | info | Jugador activo (>3 juegos en 5min) |
+
+#### Alertas de Infraestructura (monitoring/prometheus/rules/gamehub-alerts.yaml)
+
+- **GameHubServiceDown**: Servicio no responde por >1min
+- **GameHubHighCPU**: CPU >80% por >5min
+- **GameHubHighMemory**: Memoria >80% por >5min
+- **GameHubPodCrashLooping**: Pod reiniciando constantemente
+- **GameHubHighLatency**: Latencia >500ms en endpoints
+- **GameHubDatabaseDown**: PostgreSQL/MongoDB/Redis no disponible
+- **GameHubDiskSpaceLow**: Disco <20% libre
+- **GameHubPodNotReady**: Pod no ready por >5min
+- **GameHubHighRestartRate**: >5 reinicios en 1h
+- **GameHubAPIErrors**: Tasa de errores >5% en 5min
+
+### Integración con Slack
+
+Todas las alertas se envían al canal de Slack `#gamehub-alertas`. La configuración está en `monitoring/helm/prometheus-values.yaml`.
+
+**Actualizar webhook de Slack:**
+
+```bash
+cd monitoring/scripts
+./update-slack-webhook.sh <YOUR_SLACK_WEBHOOK_URL>
+```
+
+**Formato de alertas en Slack:**
+
+```
+🚨 [FIRING:1] GameHubHighScore - warning
+
+🎮 High Score Alert!
+   User: john_doe
+   Game: doom
+   Score: 7500 points
+
+Status: firing
+Severity: warning
+Time: 2024-01-15 10:30:00 UTC
+```
+
+### Dashboard de Grafana
+
+El dashboard **GameHub Gameplay & Monitoring** incluye 16 paneles:
+
+#### 📊 Paneles de Gameplay
+1. **Active Alerts**: Tabla de alertas activas en tiempo real
+2. **Total Scores by Game**: Puntuaciones totales por juego
+3. **Total Scores by User**: Puntuaciones totales por usuario
+4. **Score Submission Rate**: Tasa de envío de puntuaciones (irate 1m)
+5. **Latest Scores**: Últimas 10 puntuaciones registradas
+6. **Score Submissions Over Time**: Histórico de sumisiones
+7. **Top 5 Scores**: Top 5 puntuaciones actuales
+8. **Score Timeline**: Timeline de puntuaciones por juego
+
+#### 🖥️ Paneles de Infraestructura
+9. **Pod CPU Usage**: Uso de CPU por pod
+10. **Pod Memory Usage**: Uso de memoria por pod
+11. **Pod Restart Count**: Contador de reinicios por pod
+12. **Pod Status**: Estado actual de todos los pods
+13. **Network Traffic**: Tráfico de red (bytes sent/received)
+14. **Resource Limits**: Tabla de límites de CPU/memoria
+15. **Alert History**: Histórico de alertas disparadas
+16. **Service Response Times**: Tiempos de respuesta por servicio
+
+### Troubleshooting del Monitoreo
+
+#### Prometheus no encuentra targets
+
+```bash
+# 1. Verificar ServiceMonitors
+kubectl get servicemonitors -n gamehub
+
+# 2. Verificar que los servicios tienen el label correcto
+kubectl get svc -n gamehub --show-labels | grep app=
+
+# 3. Verificar que los puertos tienen nombre "http"
+kubectl get svc -n gamehub -o yaml | grep -A5 "ports:"
+
+# 4. Reiniciar Prometheus para recargar configuración
+kubectl rollout restart statefulset prometheus-prometheus -n monitoring
+```
+
+#### Grafana muestra "server misbehaving"
+
+```bash
+# 1. Verificar datasource URL
+kubectl get configmap prometheus-grafana -n monitoring -o yaml | grep url:
+
+# 2. Si la URL es incorrecta, patchear el ConfigMap
+kubectl patch configmap prometheus-grafana -n monitoring --type='json' \
+  -p='[{"op": "replace", "path": "/data/datasource.yaml", "value": "datasources:\n  - name: Prometheus\n    type: prometheus\n    access: proxy\n    url: http://prometheus-prometheus:9090"}]'
+
+# 3. Reiniciar Grafana
+kubectl delete pod -n monitoring -l app.kubernetes.io/name=grafana
+```
+
+#### Alertas no llegan a Slack
+
+```bash
+# 1. Verificar configuración de AlertManager
+kubectl get secret alertmanager-prometheus-alertmanager -n monitoring -o yaml
+
+# 2. Ver logs de AlertManager
+kubectl logs -n monitoring alertmanager-prometheus-alertmanager-0
+
+# 3. Verificar que las alertas tienen severity: warning (no info)
+kubectl get prometheusrules -n monitoring -o yaml | grep severity
+
+# 4. Forzar reload de AlertManager
+kubectl exec -n monitoring alertmanager-prometheus-alertmanager-0 -- \
+  curl -X POST http://localhost:9093/-/reload
+```
+
+#### Dashboard no muestra datos
+
+```bash
+# 1. Verificar que las métricas llegan a Prometheus
+curl -s "http://localhost:9090/api/v1/query?query=score_submissions_total" | jq
+
+# 2. Verificar que Grafana puede consultar Prometheus
+kubectl exec -n monitoring deployment/prometheus-grafana -- \
+  wget -qO- http://prometheus-prometheus:9090/api/v1/query?query=up
+
+# 3. Verificar que el dashboard está cargado
+kubectl get configmap -n monitoring | grep gamehub-gameplay
+
+# 4. Reiniciar Grafana para recargar dashboards
+kubectl rollout restart deployment prometheus-grafana -n monitoring
+```
 
 ---
 
-## 🎮 Uso
+## 🧪 Testing
 
-### 1. Registro de Usuario
+### Health Checks
 
-1. Abre http://localhost:8081
-2. Haz clic en "Registrarse"
-3. Completa el formulario
-4. Serás redirigido automáticamente a la página de juegos
+Todos los servicios exponen endpoints de health:
 
-### 2. Jugar
+```bash
+# Docker Compose
+curl http://localhost:3001/health  # auth-service
+curl http://localhost:3002/health  # user-service
+curl http://localhost:3003/health  # score-service
+curl http://localhost:3004/health  # ranking-service
+curl http://localhost:3005/health  # game-catalog-service
 
-- Selecciona un juego de la lista
-- Espera a que cargue el emulador (5-10 segundos)
-- Usa las teclas de dirección y CTRL/ALT para jugar
-- Tu puntuación se guardará automáticamente al salir
+# Kubernetes
+kubectl exec -n gamehub <POD_NAME> -- wget -qO- http://localhost:3001/health
+```
 
-### 3. Rankings
+### Logs
 
-Los rankings se actualizan en tiempo real y se muestran en el panel derecho.
+```bash
+# Docker Compose - Ver logs de todos los servicios
+docker compose logs -f
 
----
+# Docker Compose - Ver logs de un servicio específico
+docker compose logs -f score-service
 
-## 📚 Documentación Adicional
+# Kubernetes - Ver logs de un pod
+kubectl logs -n gamehub <POD_NAME>
 
-- **[ARCHITECTURE.md](ARCHITECTURE.md)**: Arquitectura detallada del sistema
-- **[COMMANDS.md](COMMANDS.md)**: Comandos útiles de Docker y debugging
-- **[USER_GUIDE.md](USER_GUIDE.md)**: Guía completa del usuario
-- **[GAMES_GUIDE.md](GAMES_GUIDE.md)**: Guía de controles de cada juego
-- **[README_MICROSERVICES.md](README_MICROSERVICES.md)**: Documentación técnica de microservicios
+# Kubernetes - Ver logs de un deployment
+kubectl logs -n gamehub deployment/score-service -f
+```
 
 ---
 
@@ -112,22 +377,30 @@ Los rankings se actualizan en tiempo real y se muestran en el panel derecho.
 
 ```
 gamehub/
-├── services/                # Microservicios
+├── services/                # Microservicios backend
 │   ├── auth-service/       # Autenticación JWT
 │   ├── user-service/       # Gestión de usuarios
-│   ├── score-service/      # Puntuaciones
-│   ├── ranking-service/    # Rankings
-│   └── game-catalog-service/ # Catálogo
-├── frontend/               # Aplicación web
-├── infrastructure/         # Kong, Kubernetes, nginx
-├── monitoring/             # Prometheus + Grafana
-├── juegos/                 # Archivos .jsdos
-├── shared/                 # Eventos compartidos
-└── docker-compose.yml      # Orquestación
-
+│   ├── score-service/      # Puntuaciones + métricas custom
+│   ├── ranking-service/    # Rankings con cache Redis
+│   └── game-catalog-service/ # Catálogo de juegos
+├── frontend/               # Aplicación web + JS-DOS emulator
+├── infrastructure/         # Configuración de infraestructura
+│   ├── kong/              # API Gateway config
+│   ├── kubernetes/        # Manifiestos K8s (deployments, services, ingress)
+│   └── nginx/             # Configuración nginx para CDN
+├── monitoring/             # Stack de monitoreo
+│   ├── helm/              # prometheus-values.yaml
+│   ├── prometheus/        # ServiceMonitors + PrometheusRules
+│   ├── grafana/           # Dashboards auto-importados
+│   └── scripts/           # Scripts de instalación
+├── juegos/                 # Archivos .jsdos de juegos
+├── shared/                 # Código compartido (eventos)
+└── docker-compose.yml      # Orquestación local
 ```
 
 ### Comandos Útiles
+
+#### Docker Compose
 
 ```bash
 # Ver logs de un servicio
@@ -147,6 +420,38 @@ docker compose down
 
 # Detener y eliminar volúmenes (reset completo)
 docker compose down -v
+```
+
+#### Kubernetes
+
+```bash
+# Ver todos los pods
+kubectl get pods -n gamehub
+
+# Ver logs de un pod
+kubectl logs -n gamehub <POD_NAME> -f
+
+# Reiniciar un deployment
+kubectl rollout restart deployment score-service -n gamehub
+
+# Ver estado de rollout
+kubectl rollout status deployment score-service -n gamehub
+
+# Ejecutar comando en un pod
+kubectl exec -n gamehub <POD_NAME> -- sh
+
+# Ver métricas de recursos
+kubectl top pods -n gamehub
+kubectl top nodes
+
+# Escalar manualmente un deployment
+kubectl scale deployment score-service -n gamehub --replicas=3
+
+# Ver HPA (autoscaling)
+kubectl get hpa -n gamehub
+
+# Port-forward para acceder a un servicio
+kubectl port-forward -n gamehub svc/score-service 3003:3003
 ```
 
 ### Variables de Entorno
@@ -183,253 +488,62 @@ REDIS_PORT=6379
 - **Cache Distribuido**: Redis con TTL de 30 segundos
 - **Circuit Breaker**: Fault tolerance en comunicación entre servicios
 - **Health Checks**: Endpoints `/health` y `/ready` en todos los servicios
-- **Observability**: Métricas Prometheus + Dashboards Grafana
+- **Observability**: Métricas Prometheus + Dashboards Grafana + Alertas Slack
+- **Custom Metrics**: score_submissions_total, last_score_value
+- **Auto-scaling**: HPA en Kubernetes basado en CPU/memoria
+- **GitOps**: Manifiestos declarativos en Git
 
 ---
 
----
+## 🎮 Uso
 
-## ☸️ Kubernetes Deployment
+### 1. Registro de Usuario
 
-GameHub incluye soporte completo para Kubernetes con:
-- **HPA (Horizontal Pod Autoscaler)**: Escalado automático de 1-10 réplicas por juego
-- **10 deployments independientes**: Un deployment por cada juego
-- **Métricas**: metrics-server para HPA basado en CPU/memoria
-- **Health checks**: Liveness y readiness probes
-- **Resource limits**: CPU y memoria controlados
+1. Abre http://localhost:8082 (Docker Compose) o http://localhost:8081 (Kubernetes)
+2. Haz clic en "Registrarse"
+3. Completa el formulario
+4. Serás redirigido automáticamente a la página de juegos
 
-### Prerrequisitos para Kubernetes
+### 2. Jugar
 
-- Minikube 1.30+ o cualquier cluster de Kubernetes
-- kubectl configurado
-- 8GB RAM y 4 CPUs recomendados para Minikube
-- Docker para construir imágenes
+- Selecciona un juego de la lista
+- Espera a que cargue el emulador (5-10 segundos)
+- Usa las teclas de dirección y CTRL/ALT para jugar
+- Tu puntuación se guardará automáticamente al salir
 
-### Inicio Rápido con Minikube
+### 3. Rankings
 
-```bash
-# 1. Iniciar Minikube
-minikube start --memory=8192 --cpus=4
-
-# 2. Habilitar addons necesarios
-minikube addons enable metrics-server
-minikube addons enable ingress
-
-# 3. Configurar Docker para usar el daemon de Minikube
-eval $(minikube docker-env)
-
-# 4. Construir imágenes
-cd /mnt/c/tests/gamehub
-docker build -f frontend/Dockerfile.k8s -t gamehub-frontend-full:latest .
-docker build -f services/auth-service/Dockerfile -t gamehub-auth-service:latest services/auth-service/
-docker build -f services/score-service/Dockerfile -t gamehub-score-service:latest services/score-service/
-docker build -f services/ranking-service/Dockerfile -t gamehub-ranking-service:latest services/ranking-service/
-
-# 5. Crear namespace
-kubectl create namespace gamehub
-
-# 6. Desplegar servicios backend (PostgreSQL, Redis, Auth, Score, Ranking)
-kubectl apply -f infrastructure/kubernetes/games/backend-services.yaml
-
-# 7. Generar deployments de juegos
-cd infrastructure/kubernetes/games
-chmod +x generate-game-deployments.sh
-./generate-game-deployments.sh
-
-# 8. Desplegar los 10 juegos
-kubectl apply -f deployments/
-
-# 9. Verificar que todos los pods estén corriendo
-kubectl get pods -n gamehub
-```
-
-### Acceso a los Servicios
-
-Opción 1: **Port Forwards** (desarrollo local)
-
-```bash
-# Terminal 1: Frontend
-kubectl port-forward -n gamehub svc/doom-game-service 8081:8081
-
-# Terminal 2: Auth Service
-kubectl port-forward -n gamehub svc/auth-service 8000:3001
-
-# Terminal 3: Score Service
-kubectl port-forward -n gamehub svc/score-service 8003:3003
-
-# Terminal 4: Ranking Service
-kubectl port-forward -n gamehub svc/ranking-service 8004:3004
-```
-
-Luego accede a: http://localhost:8081
-
-Opción 2: **NodePort** (Minikube)
-
-```bash
-# Obtener URL del servicio
-minikube service doom-game-service -n gamehub --url
-```
-
-Opción 3: **Ingress** (producción)
-
-```bash
-# Aplicar ingress
-kubectl apply -f infrastructure/kubernetes/games/simple-ingress.yaml
-
-# Agregar a /etc/hosts
-echo "$(minikube ip) gamehub.local" | sudo tee -a /etc/hosts
-
-# Acceder
-http://gamehub.local
-```
-
-### Arquitectura de Kubernetes
-
-```
-gamehub namespace
-├── Backend Services
-│   ├── postgres-auth (PostgreSQL 15)
-│   ├── redis (Redis 7)
-│   ├── auth-service (Node.js)
-│   ├── score-service (Node.js)
-│   └── ranking-service (Node.js)
-│
-└── Game Deployments (10 total)
-    ├── doom-game (HPA: 1-10 replicas)
-    ├── wolf-game (HPA: 1-10 replicas)
-    ├── tetris-game (HPA: 1-10 replicas)
-    ├── mortalkombat-game (HPA: 1-10 replicas)
-    ├── dangerousdave2-game (HPA: 1-10 replicas)
-    ├── digger-game (HPA: 1-10 replicas)
-    ├── dukenukem3d-game (HPA: 1-10 replicas)
-    ├── heroesofmightandmagic2-game (HPA: 1-10 replicas)
-    ├── lostvikings-game (HPA: 1-10 replicas)
-    └── streetfighter2-game (HPA: 1-10 replicas)
-```
-
-### HPA (Horizontal Pod Autoscaler)
-
-Cada juego tiene configurado:
-- **Min replicas**: 1
-- **Max replicas**: 10
-- **Métricas**: CPU 70%, Memoria 80%
-- **Scale up**: Inmediato (100% o 2 pods cada 15s)
-- **Scale down**: 5 minutos de estabilización (máx 50% cada 60s)
-
-```bash
-# Ver estado de HPA
-kubectl get hpa -n gamehub
-
-# Ver en tiempo real
-kubectl get hpa -n gamehub -w
-```
-
-### Monitoreo y Testing
-
-```bash
-# Ver todos los pods
-kubectl get pods -n gamehub
-
-# Ver logs de un pod
-kubectl logs -f -n gamehub <pod-name>
-
-# Ejecutar monitor en tiempo real
-cd infrastructure/kubernetes/games
-./monitor-games.sh
-
-# Generar carga para probar HPA
-./load-test.sh
-```
-
-### Comandos Útiles de Kubernetes
-
-```bash
-# Ver estado de todos los recursos
-kubectl get all -n gamehub
-
-# Describir un pod
-kubectl describe pod <pod-name> -n gamehub
-
-# Ejecutar comando en un pod
-kubectl exec -it -n gamehub <pod-name> -- /bin/sh
-
-# Ver logs de múltiples pods
-kubectl logs -f -n gamehub -l app=doom-game
-
-# Reiniciar un deployment
-kubectl rollout restart deployment/doom-game -n gamehub
-
-# Ver historial de rollout
-kubectl rollout history deployment/doom-game -n gamehub
-
-# Escalar manualmente
-kubectl scale deployment doom-game -n gamehub --replicas=5
-
-# Ver métricas de recursos
-kubectl top nodes
-kubectl top pods -n gamehub
-```
-
-### Limpieza de Kubernetes
-
-```bash
-# Eliminar todo el namespace (cuidado!)
-kubectl delete namespace gamehub
-
-# Eliminar deployments específicos
-kubectl delete -f infrastructure/kubernetes/games/deployments/
-
-# Eliminar servicios backend
-kubectl delete -f infrastructure/kubernetes/games/backend-services.yaml
-```
-
-### Detalles Técnicos
-
-Ver [infrastructure/kubernetes/games/README.md](infrastructure/kubernetes/games/README.md) para:
-- Configuración detallada de HPA
-- Troubleshooting de Kubernetes
-- Scripts de automatización
-- Arquitectura de red y volúmenes
+Los rankings se actualizan en tiempo real y se muestran en el panel derecho.
 
 ---
 
-## 🐳 Docker Compose (Desarrollo Local)
+## 📚 Documentación Adicional
 
-## 🐳 Kubernetes (Opcional)
-
-El proyecto incluye manifiestos de Kubernetes en `infrastructure/kubernetes/`:
-
-```bash
-# Aplicar namespace y secrets
-kubectl apply -f infrastructure/kubernetes/namespace-and-secrets.yaml
-
-# Desplegar servicios
-kubectl apply -f infrastructure/kubernetes/deployments/
-kubectl apply -f infrastructure/kubernetes/services/
-
-# Aplicar ingress
-kubectl apply -f infrastructure/kubernetes/ingress/
-```
+- **[ARCHITECTURE.md](ARCHITECTURE.md)**: Arquitectura detallada del sistema
+- **[monitoring/README.md](monitoring/README.md)**: Guía completa de monitoreo
+- **[infrastructure/kubernetes/games/ARCHITECTURE.md](infrastructure/kubernetes/games/ARCHITECTURE.md)**: Arquitectura Kubernetes con HPA
 
 ---
 
 ## 🔧 Troubleshooting
 
-### Los servicios no inician
+### Docker Compose
+
+#### Los servicios no inician
 
 ```bash
 # Ver logs
 docker compose logs
 
 # Verificar puertos ocupados
-netstat -tuln | grep -E "3000|3001|3002|3003|3004|3005|5432|5433|5434|6379|8000|8081|8086|9090|27017"
+netstat -tuln | grep -E "3000|3001|3002|3003|3004|3005|5432|6379|8000|8082"
 
 # Reiniciar todo
 docker compose down -v
 docker compose up -d
 ```
 
-### Error 429 (Rate Limiting)
+#### Error 429 (Rate Limiting)
 
 Los límites configurados son:
 - Auth: 100 req/min
@@ -437,11 +551,41 @@ Los límites configurados son:
 
 Si necesitas más, edita `infrastructure/kong/kong.yml`
 
-### Juegos no cargan
+#### Juegos no cargan
 
-1. Verifica que `games-cdn` esté corriendo: `docker compose ps games-cdn`
+1. Verifica que el frontend esté corriendo: `docker compose ps frontend`
 2. Comprueba que los archivos .jsdos existan: `ls -lh juegos/`
 3. Revisa logs del frontend: `docker compose logs frontend`
+
+### Kubernetes
+
+#### Pods en CrashLoopBackOff
+
+```bash
+# Ver logs del pod
+kubectl logs -n gamehub <POD_NAME> --previous
+
+# Describir el pod para ver eventos
+kubectl describe pod -n gamehub <POD_NAME>
+
+# Verificar recursos disponibles
+kubectl top nodes
+kubectl describe node <NODE_NAME>
+```
+
+#### HPA no escala
+
+```bash
+# Verificar metrics-server
+kubectl get apiservice v1beta1.metrics.k8s.io -o yaml
+
+# Ver métricas disponibles
+kubectl top pods -n gamehub
+
+# Reiniciar metrics-server
+minikube addons disable metrics-server
+minikube addons enable metrics-server
+```
 
 ---
 
@@ -454,3 +598,26 @@ Si necesitas más, edita `infrastructure/kong/kong.yml`
 5. Abre un Pull Request
 
 ---
+
+## 👨‍💻 Autor
+
+**Juan Pablo Alenza**
+- GitHub: [@jpalenz77](https://github.com/jpalenz77)
+- Proyecto: [gamehub_micro](https://github.com/jpalenz77/gamehub_micro)
+
+**Práctica Final - Bootcamp DevOps Ed. 12 - KeepCoding**
+
+---
+
+## 📄 Licencia
+
+Este proyecto es de uso educativo para la práctica final del Bootcamp de DevOps de KeepCoding.
+
+---
+
+## 🙏 Agradecimientos
+
+- **KeepCoding**: Por el Bootcamp de DevOps
+- **JS-DOS**: Por el emulador de DOSBox en browser
+- **Prometheus Community**: Por el Helm chart kube-prometheus-stack
+- **Comunidad Open Source**: Por todas las herramientas utilizadas

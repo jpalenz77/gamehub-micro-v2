@@ -42,6 +42,8 @@ alertmanager:
           resources:
             requests:
               storage: 5Gi
+    secrets:
+      - alertmanager-slack
     resources:
       requests:
         cpu: 100m
@@ -60,16 +62,8 @@ alertmanager:
       group_wait: 10s
       group_interval: 10s
       repeat_interval: 12h
-      receiver: 'slack-critical'
+      receiver: 'slack-gamehub'
       routes:
-        - match:
-            severity: critical
-          receiver: slack-critical
-          continue: true
-        - match:
-            severity: warning
-          receiver: slack-warnings
-          continue: true
         - match:
             alertname: Watchdog
           receiver: 'null'
@@ -77,34 +71,22 @@ alertmanager:
     receivers:
       - name: 'null'
       
-      - name: 'slack-critical'
+      - name: 'slack-gamehub'
         slack_configs:
-          - channel: '#gamehub-alerts-critical'
-            title: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
+          - channel: '#gamehub-alertas'
+            title: '{{ if eq .Status "firing" }}🚨{{ else }}✅{{ end }} {{ .GroupLabels.alertname }}'
             text: |
               {{ range .Alerts }}
               *Alert:* {{ .Annotations.summary }}
               *Description:* {{ .Annotations.description }}
               *Severity:* {{ .Labels.severity }}
               *Namespace:* {{ .Labels.namespace }}
-              *Pod:* {{ .Labels.pod }}
+              {{ if .Labels.pod }}*Pod:* {{ .Labels.pod }}{{ end }}
+              {{ if .Labels.username }}*User:* {{ .Labels.username }}{{ end }}
+              {{ if .Labels.game }}*Game:* {{ .Labels.game }}{{ end }}
               {{ end }}
             send_resolved: true
-            color: 'danger'
-      
-      - name: 'slack-warnings'
-        slack_configs:
-          - channel: '#gamehub-alerts'
-            title: '⚠️ WARNING: {{ .GroupLabels.alertname }}'
-            text: |
-              {{ range .Alerts }}
-              *Alert:* {{ .Annotations.summary }}
-              *Description:* {{ .Annotations.description }}
-              *Severity:* {{ .Labels.severity }}
-              *Namespace:* {{ .Labels.namespace }}
-              {{ end }}
-            send_resolved: true
-            color: 'warning'
+            color: '{{ if eq .Status "firing" }}{{ if eq .CommonLabels.severity "critical" }}danger{{ else if eq .CommonLabels.severity "warning" }}warning{{ else }}good{{ end }}{{ else }}good{{ end }}'
     
     templates:
       - '/etc/alertmanager/config/*.tmpl'
@@ -156,7 +138,7 @@ grafana:
       datasources:
       - name: Prometheus
         type: prometheus
-        url: http://prometheus-kube-prometheus-prometheus:9090
+        url: http://prometheus-prometheus:9090
         access: proxy
         isDefault: true
         jsonData:
