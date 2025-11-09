@@ -212,17 +212,43 @@ jobs:
 
       - name: Deploy to Minikube
         run: |
-          # Deploy backend services
-          kubectl apply -f infrastructure/kubernetes/deployments/ -n gamehub
-          kubectl apply -f infrastructure/kubernetes/services/ -n gamehub
+          # Deploy backend services (PostgreSQL, Redis, and microservices)
+          kubectl apply -f infrastructure/kubernetes/games/backend-services.yaml -n gamehub
           
           # Deploy production architecture
           kubectl apply -f infrastructure/kubernetes/games/frontend-production.yaml -n gamehub
           kubectl apply -f infrastructure/kubernetes/games/cdn-production.yaml -n gamehub
           kubectl apply -f infrastructure/kubernetes/games/kong-deployment.yaml -n gamehub
           
-          # Wait for deployments
-          kubectl wait --for=condition=available --timeout=300s deployment --all -n gamehub
+          # Show deployment status
+          echo "=== Deployments ==="
+          kubectl get deployments -n gamehub
+          echo "=== Pods ==="
+          kubectl get pods -n gamehub
+          
+          # Wait a bit for pods to start
+          sleep 30
+          
+          echo "=== Pod status after 30s ==="
+          kubectl get pods -n gamehub -o wide
+          
+          echo "=== Checking image pull status ==="
+          kubectl get events -n gamehub | grep -i "pull\|image" || true
+          
+          # Wait for deployments with increased timeout
+          echo "=== Waiting for deployments to be ready ==="
+          kubectl wait --for=condition=available --timeout=600s deployment --all -n gamehub || {
+            echo "=== Deployment failed, showing pod details ==="
+            kubectl describe pods -n gamehub | grep -A20 "Events:"
+            echo "=== Recent events ==="
+            kubectl get events -n gamehub --sort-by='.lastTimestamp' | tail -30
+            echo "=== Pod logs ==="
+            for pod in $(kubectl get pods -n gamehub -o name | head -5); do
+              echo "Logs for $pod:"
+              kubectl logs $pod -n gamehub --tail=50 || true
+            done
+            exit 1
+          }
 
       - name: Run integration tests
         run: |
