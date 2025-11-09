@@ -252,21 +252,39 @@ jobs:
 
       - name: Run integration tests
         run: |
-          # Get service URLs
-          FRONTEND_URL=$(minikube service frontend-service -n gamehub --url)
-          CDN_URL=$(minikube service cdn-service -n gamehub --url)
-          KONG_URL=$(minikube service kong -n gamehub --url)
+          echo "=== Running integration tests ==="
           
-          # Test frontend health
-          curl -f $FRONTEND_URL/health || exit 1
+          # Create a test pod to curl from inside the cluster
+          kubectl run test-pod --image=curlimages/curl:latest --restart=Never -n gamehub -- sleep 3600
           
-          # Test CDN health
-          curl -f $CDN_URL/health || exit 1
+          # Wait for test pod to be ready
+          kubectl wait --for=condition=Ready pod/test-pod -n gamehub --timeout=60s
           
-          # Test Kong health
-          curl -f $KONG_URL/health || exit 1
+          echo "=== Testing frontend health ==="
+          kubectl exec test-pod -n gamehub -- curl -f http://frontend-service:8081/health || {
+            echo "Frontend health check failed"
+            kubectl logs deployment/frontend -n gamehub --tail=50
+            exit 1
+          }
+          
+          echo "=== Testing CDN health ==="
+          kubectl exec test-pod -n gamehub -- curl -f http://cdn-service:8080/health || {
+            echo "CDN health check failed"
+            kubectl logs deployment/cdn-service -n gamehub --tail=50
+            exit 1
+          }
+          
+          echo "=== Testing Kong health ==="
+          kubectl exec test-pod -n gamehub -- curl -f http://kong:8000/ || {
+            echo "Kong health check failed"
+            kubectl logs deployment/kong -n gamehub --tail=50
+            exit 1
+          }
           
           echo "✅ All integration tests passed"
+          
+          # Cleanup test pod
+          kubectl delete pod test-pod -n gamehub --ignore-not-found=true
 
       - name: Cleanup
         if: always()
