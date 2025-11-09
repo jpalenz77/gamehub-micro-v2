@@ -33,7 +33,7 @@ app.post('/', authenticateToken, (req, res) => scoreController.createScore(req, 
 app.get('/user/:userId', authenticateToken, (req, res) => scoreController.getUserScores(req, res));
 app.get('/user/:userId/game/:game', authenticateToken, (req, res) => scoreController.getUserScoreForGame(req, res));
 
-app.use((err, req, res, next) => {
+app.use((err, req, res, _next) => {
   console.error('Error:', err);
   res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
 });

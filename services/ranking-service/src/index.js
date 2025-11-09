@@ -34,7 +34,7 @@ app.get('/games/:game/user/:userId', (req, res) => rankingController.getUserRank
 app.get('/games/:game/stats', (req, res) => rankingController.getGameStats(req, res));
 app.get('/users/:username/stats', (req, res) => rankingController.getUserStats(req, res));
 
-app.use((err, req, res, next) => {
+app.use((err, req, res, _next) => {
   console.error('Error:', err);
   res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
 });
