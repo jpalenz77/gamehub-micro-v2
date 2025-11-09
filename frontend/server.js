@@ -5,6 +5,16 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
+// Middleware para deshabilitar caché en desarrollo
+app.use((req, res, next) => {
+  if (req.url.endsWith('.html')) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+  next();
+});
+
 // Determinar la raíz del proyecto (un nivel por encima de 'frontend')
 const projectRoot = path.resolve(__dirname, '..');
 

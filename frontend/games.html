@@ -2,6 +2,9 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>GameHub Retro - Selección de Juegos</title>
     <link rel="stylesheet" href="retro.css">
     <link rel="stylesheet" href="./jsdos/js-dos.css">
@@ -67,7 +70,9 @@
     </div>
 
     <div id="loader"></div>
-    <div id="dosbox-container"></div>
+    <div id="dosbox-container">
+        <div id="dosbox" style="display: none;"></div>
+    </div>
 
     <section id="ranking">
         <h2>🏆 Clasificación de Jugadores - <span id="current-game">DOOM</span></h2>
@@ -107,16 +112,57 @@
     </section>
 
     <script>
-        const API = "http://localhost:8082/api";
-        const token = localStorage.getItem("token");
+        // API Gateway URL (Kong)
+        const API = window.location.hostname === 'localhost' 
+          ? "http://localhost:8000/api" 
+          : "https://api.gamehub.example.com/api";
+        
+        let accessToken = localStorage.getItem("accessToken");
+        const refreshToken = localStorage.getItem("refreshToken");
         const username = localStorage.getItem("username");
+        const userId = localStorage.getItem("userId");
         const loader = document.getElementById("loader");
-        const container = document.getElementById("dosbox-container");
+        let container = document.getElementById("dosbox"); // 🆕 Cambiado a let para poder reasignar
         const rankingBody = document.getElementById("ranking-body");
         let currentRankingGame = "doom";
-        let currentScoreSystem = null; // 🆕 Sistema de puntuación híbrido
+        let currentScoreSystem = null;
+        let isRedirecting = false; // 🆕 Flag para evitar cargas durante redirección
 
-        // 🟢 MAPA DE TÍTULOS CORREGIDO
+        // 🆕 Función para verificar si el token está expirado
+        function isTokenExpired(token) {
+            if (!token) return true;
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                return payload.exp * 1000 < Date.now();
+            } catch (e) {
+                return true;
+            }
+        }
+
+        // 🆕 Función para renovar el token
+        async function refreshAccessToken() {
+            if (!refreshToken) return false;
+            
+            try {
+                const res = await fetch(`${API}/auth/refresh`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ refreshToken })
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    accessToken = data.accessToken;
+                    localStorage.setItem("accessToken", data.accessToken);
+                    console.log("✅ Token renovado exitosamente");
+                    return true;
+                }
+            } catch (err) {
+                console.error("❌ Error al renovar token:", err);
+            }
+            return false;
+        }
+
         const JUEGOS_TITULOS = {
             "doom": "DOOM",
             "wolf": "Wolfenstein 3D",
@@ -129,9 +175,12 @@
             "streetfighter2": "Street Fighter 2",
             "tetris": "Tetris"
         };
-        // -----------------------------
 
-        if (!token) window.location.href = "./index.html";
+        // Verificar si está logueado (opcional para jugar, pero necesario para guardar scores)
+        const isLoggedIn = !!accessToken;
+        if (!isLoggedIn) {
+            console.warn("⚠️ No estás logueado. Puedes jugar pero no guardar puntuaciones.");
+        }
 
         // Cargar ranking inicial al abrir la página
         loadRanking("doom");
@@ -141,15 +190,76 @@
             window.location.href = "./index.html";
         };
 
-        async function saveScore(game, score) {
+        async function saveScore(game, score, retryCount = 0) {
+            // Prevenir bucle infinito
+            if (retryCount > 2) {
+                console.error("❌ Demasiados reintentos, abortando");
+                isRedirecting = true;
+                alert("🔒 Error al guardar puntuación después de varios intentos.\n\nPor favor, inicia sesión nuevamente.\n\nRedirigiendo al login...");
+                localStorage.clear();
+                setTimeout(() => window.location.href = "./index.html", 3000);
+                return;
+            }
+            
+            // Si no está logueado, no intentar guardar
+            if (!accessToken) {
+                console.warn("⚠️ Debes iniciar sesión para guardar tu puntuación");
+                isRedirecting = true;
+                alert("⚠️ No estás logueado.\n\n✅ Puedes jugar libremente.\n❌ NO se guardarán tus puntuaciones.\n\nRedirigiendo al login...");
+                setTimeout(() => window.location.href = "./index.html", 3000);
+                return;
+            }
+
+            // 🆕 Verificar si el token expiró y renovarlo (solo en primer intento)
+            if (retryCount === 0 && isTokenExpired(accessToken)) {
+                console.log("⏰ Token expirado, intentando renovar...");
+                const renewed = await refreshAccessToken();
+                
+                if (!renewed) {
+                    console.error("❌ No se pudo renovar el token");
+                    isRedirecting = true;
+                    alert("🔒 Tu sesión ha expirado y no se pudo renovar.\n\nPor favor, inicia sesión nuevamente.\n\nRedirigiendo al login...");
+                    localStorage.clear();
+                    setTimeout(() => window.location.href = "./index.html", 3000);
+                    return;
+                }
+                // Actualizar el token después del refresh
+                accessToken = localStorage.getItem("accessToken");
+            }
+
             try {
-                const res = await fetch(`${API}/score`, {
+                const res = await fetch(`${API}/scores`, {
                     method: "POST",
-                    headers: {"Content-Type":"application/json","Authorization":`Bearer ${token}`},
+                    headers: {
+                        "Content-Type":"application/json",
+                        "Authorization":`Bearer ${accessToken}`
+                    },
                     body: JSON.stringify({game, score})
                 });
+                
+                if (res.status === 403 || res.status === 401) {
+                    console.error(`❌ Token inválido o expirado (intento ${retryCount + 1}/3)`);
+                    
+                    // Intentar renovar una vez más
+                    const renewed = await refreshAccessToken();
+                    if (renewed) {
+                        // Actualizar accessToken antes de reintentar
+                        accessToken = localStorage.getItem("accessToken");
+                        console.log("🔄 Reintentando con nuevo token...");
+                        
+                        // Reintentar guardar con nuevo token (incrementar contador)
+                        return saveScore(game, score, retryCount + 1);
+                    }
+                    
+                    isRedirecting = true;
+                    alert("🔒 Tu sesión ha expirado.\n\nPor favor, inicia sesión nuevamente.\n\nRedirigiendo al login...");
+                    localStorage.clear();
+                    setTimeout(() => window.location.href = "./index.html", 3000);
+                    return;
+                }
+                
                 const data = await res.json();
-                console.log("Puntuación guardada:", data);
+                console.log("✅ Puntuación guardada:", data);
                 
                 // Actualizar el ranking después de guardar
                 await loadRanking(game);
@@ -161,10 +271,9 @@
         async function loadRanking(game) {
             try {
                 currentRankingGame = game;
-                const res = await fetch(`${API}/scores/${game}`);
+                const res = await fetch(`${API}/rankings/games/${game}`);
                 const data = await res.json();
                 
-                // 🟢 CORRECCIÓN: Usar el mapa de títulos para el encabezado
                 const title = JUEGOS_TITULOS[game] || game.toUpperCase();
                 document.getElementById("current-game").textContent = title;
                 
@@ -206,30 +315,71 @@
         }
 
         async function loadGame(game) {
-            if (window.ciInstance && window.ciInstance.exit) {
-                try { await window.ciInstance.exit(); } catch {}
+            console.log(`🎮 loadGame llamado con: ${game}`);
+            console.log(`📍 container actual:`, container);
+            
+            // 🛑 NO cargar juegos si estamos redirigiendo al login
+            if (isRedirecting) {
+                console.warn("⚠️ Redirigiendo al login, no se cargará el juego");
+                return;
+            }
+
+            // 🧹 LIMPIEZA COMPLETA antes de cargar nuevo juego
+            if (window.ciInstance) {
+                try {
+                    console.log("🧹 Limpiando instancia anterior de JS-DOS...");
+                    if (window.ciInstance.exit) {
+                        await window.ciInstance.exit();
+                    }
+                } catch (e) {
+                    console.warn("⚠️ Error al limpiar instancia:", e);
+                } finally {
+                    window.ciInstance = null;
+                }
             }
             
             // Limpiar tracker anterior si existe
             if (currentScoreSystem) {
-                currentScoreSystem.destroy();
+                try {
+                    currentScoreSystem.destroy();
+                } catch (e) {
+                    console.warn("⚠️ Error al destruir ScoreSystem:", e);
+                } finally {
+                    currentScoreSystem = null;
+                }
             }
             
-            container.style.display = "none";
+            // Limpiar completamente el contenedor DOM y recrear
+            const dosboxContainer = document.getElementById("dosbox-container");
+            // Remover todos los event listeners y contenido
+            dosboxContainer.innerHTML = '';
+            // Crear nuevo div dosbox limpio
+            const newDosbox = document.createElement('div');
+            newDosbox.id = 'dosbox';
+            newDosbox.style.display = 'none';
+            dosboxContainer.appendChild(newDosbox);
+            container = newDosbox; // 🆕 Reasignar la referencia global
+            
+            console.log(`📦 Container después de recrear:`, container);
+            
             loader.textContent = `Cargando ${game.toUpperCase()}...`;
             
-            // ✅ Se mantiene el mapa de rutas, que ya estaba correcto
+            // CDN URLs - games-cdn sirve los archivos .jsdos
+            const CDN_URL = window.location.hostname === 'localhost' 
+                ? 'http://localhost:8086/juegos' 
+                : '/juegos';
+            
             const JUEGOS_RUTAS = {
-                "doom": "http://localhost:8085/doom.jsdos",
-                "wolf": "../juegos/wolf.jsdos",
-                "dangerousdave2": "../juegos/dangerousdave2.jsdos", 
-                "digger": "../juegos/digger.jsdos",
-                "dukenukem3d": "../juegos/duke3d.jsdos",
-                "heroesofmightandmagic2": "../juegos/heroesofmightandmagic2.jsdos",
-                "lostvikings": "../juegos/lostvikings.jsdos",
-                "mortalkombat": "../juegos/mortalkombat.jsdos",
-                "streetfighter2": "../juegos/streetfighter2.jsdos",
-                "tetris": "../juegos/tetris.jsdos" 
+                "doom": `${CDN_URL}/doom.jsdos`,
+                "wolf": `${CDN_URL}/wolf.jsdos`,
+                "dangerousdave2": `${CDN_URL}/dangerousdave2.jsdos`, 
+                "digger": `${CDN_URL}/digger.jsdos`,
+                "dukenukem3d": `${CDN_URL}/duke3d.jsdos`,
+                "heroesofmightandmagic2": `${CDN_URL}/heroesofmightandmagic2.jsdos`,
+                "lostvikings": `${CDN_URL}/lostvikings.jsdos`,
+                "mortalkombat": `${CDN_URL}/mortalkombat.jsdos`,
+                "streetfighter2": `${CDN_URL}/streetfighter2.jsdos`,
+                "tetris": `${CDN_URL}/tetris.jsdos` 
             };
 
             const url = JUEGOS_RUTAS[game] || "./juegos/default.jsdos";
@@ -238,16 +388,26 @@
             await loadRanking(game);
 
             try {
+                console.log(`🎮 Cargando juego desde: ${url}`);
+                console.log(`📦 Container antes de Dos():`, container);
+                
                 const ci = await Dos(container, {url, pathPrefix:"./jsdos/", mouseLock:true});
                 window.ciInstance = ci;
                 
+                console.log(`✅ Dos() ejecutado exitosamente`);
+                
                 // 🆕 Iniciar sistema híbrido de puntuación
                 currentScoreSystem = new HybridScoreSystem(game, ci);
-                console.log(`🎮 Tracking de puntuación iniciado para ${game.toUpperCase()}`);
+                console.log(`✅ Tracking de puntuación iniciado para ${game.toUpperCase()}`);
                 
                 loader.textContent = "";
                 container.style.display = "block";
+                
+                console.log(`📺 Container display establecido a 'block'`);
 
+                // 🆕 Guardar la función original de exit
+                const originalExit = ci.exit;
+                
                 ci.exit = async () => {
                     console.log(`🏁 Juego terminado, calculando puntuación...`);
                     
@@ -255,15 +415,35 @@
                     const score = await currentScoreSystem.getFinalScore();
                     console.log(`📊 Puntuación final: ${score}`);
                     
+                    // Guardar score solo si está logueado
                     await saveScore(game, score);
                     
                     // Limpiar sistema de puntuación
-                    currentScoreSystem.destroy();
-                    currentScoreSystem = null;
+                    if (currentScoreSystem) {
+                        currentScoreSystem.destroy();
+                        currentScoreSystem = null;
+                    }
+                    
+                    // Llamar al exit original de JS-DOS
+                    if (originalExit) {
+                        try {
+                            await originalExit.call(ci);
+                        } catch (e) {
+                            console.warn("⚠️ Error en exit original:", e);
+                        }
+                    }
+                    
+                    // 🆕 Limpiar la instancia
+                    window.ciInstance = null;
+                    
+                    console.log("✅ Juego terminado y limpiado correctamente");
                 };
+                
+                console.log("✅ Juego cargado exitosamente");
             } catch (err) {
                 loader.textContent = "";
-                console.error("Error al cargar juego:", err);
+                console.error("❌ Error al cargar juego:", err);
+                alert(`Error al cargar ${game}: ${err.message}`);
             }
         }
     </script>

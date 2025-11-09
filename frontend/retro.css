@@ -192,7 +192,7 @@ input:focus {
     margin: 20px auto;
     border: 2px solid #00ff88;
     border-radius: 10px;
-    display: none;
+    display: block;
     box-shadow: 0 0 25px #00ff88;
     z-index: 5;
 }
