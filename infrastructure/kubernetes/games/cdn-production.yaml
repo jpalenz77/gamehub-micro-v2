@@ -92,7 +92,7 @@ spec:
     spec:
       containers:
       - name: nginx
-        image: gamehub-cdn:latest
+        image: ghcr.io/jpalenz77/gamehub-cdn:latest
         imagePullPolicy: Never
         ports:
         - containerPort: 8080

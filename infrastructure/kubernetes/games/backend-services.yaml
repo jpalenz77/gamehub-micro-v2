@@ -108,7 +108,7 @@ spec:
     spec:
       containers:
       - name: auth-service
-        image: gamehub-auth-service:latest
+        image: ghcr.io/jpalenz77/gamehub-auth-service:latest
         imagePullPolicy: Never
         ports:
         - containerPort: 3001
@@ -172,7 +172,7 @@ spec:
     spec:
       containers:
       - name: ranking-service
-        image: gamehub-ranking-service:latest
+        image: ghcr.io/jpalenz77/gamehub-ranking-service:latest
         imagePullPolicy: Never
         ports:
         - containerPort: 3004
@@ -236,7 +236,7 @@ spec:
     spec:
       containers:
       - name: score-service
-        image: gamehub-score-service:latest
+        image: ghcr.io/jpalenz77/gamehub-score-service:latest
         imagePullPolicy: Never
         ports:
         - containerPort: 3003

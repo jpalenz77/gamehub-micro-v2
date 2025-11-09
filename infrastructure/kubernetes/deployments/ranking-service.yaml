@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: ranking-service
-        image: gamehub/ranking-service:latest
+        image: ghcr.io/jpalenz77/gamehub-ranking-service:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 3004

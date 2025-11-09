@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: gamehub-frontend-production:latest
+        image: ghcr.io/jpalenz77/gamehub-frontend-production:latest
         imagePullPolicy: Never
         ports:
         - containerPort: 8081
