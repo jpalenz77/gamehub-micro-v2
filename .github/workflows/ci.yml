@@ -201,6 +201,15 @@ jobs:
       - name: Create namespace
         run: kubectl create namespace gamehub
 
+      - name: Create GHCR imagePullSecret
+        run: |
+          kubectl create secret docker-registry ghcr-secret \
+            --docker-server=ghcr.io \
+            --docker-username=${{ github.actor }} \
+            --docker-password=${{ secrets.GITHUB_TOKEN }} \
+            --docker-email=${{ github.actor }}@users.noreply.github.com \
+            -n gamehub
+
       - name: Deploy to Minikube
         run: |
           # Deploy backend services

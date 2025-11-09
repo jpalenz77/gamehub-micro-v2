@@ -23,6 +23,8 @@ spec:
       labels:
         app: postgres-auth
     spec:
+      imagePullSecrets:
+      - name: ghcr-secret
       containers:
       - name: postgres
         image: postgres:15-alpine
@@ -66,6 +68,8 @@ spec:
       labels:
         app: redis
     spec:
+      imagePullSecrets:
+      - name: ghcr-secret
       containers:
       - name: redis
         image: redis:7-alpine
@@ -106,10 +110,12 @@ spec:
       labels:
         app: auth-service
     spec:
+      imagePullSecrets:
+      - name: ghcr-secret
       containers:
       - name: auth-service
         image: ghcr.io/jpalenz77/gamehub-auth-service:latest
-        imagePullPolicy: Never
+        imagePullPolicy: Always
         ports:
         - containerPort: 3001
         env:
@@ -170,10 +176,12 @@ spec:
       labels:
         app: ranking-service
     spec:
+      imagePullSecrets:
+      - name: ghcr-secret
       containers:
       - name: ranking-service
         image: ghcr.io/jpalenz77/gamehub-ranking-service:latest
-        imagePullPolicy: Never
+        imagePullPolicy: Always
         ports:
         - containerPort: 3004
         env:
@@ -234,10 +242,12 @@ spec:
       labels:
         app: score-service
     spec:
+      imagePullSecrets:
+      - name: ghcr-secret
       containers:
       - name: score-service
         image: ghcr.io/jpalenz77/gamehub-score-service:latest
-        imagePullPolicy: Never
+        imagePullPolicy: Always
         ports:
         - containerPort: 3003
         env:

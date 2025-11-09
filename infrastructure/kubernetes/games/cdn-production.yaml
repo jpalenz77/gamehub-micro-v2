@@ -90,10 +90,12 @@ spec:
         app: cdn
         tier: cdn
     spec:
+      imagePullSecrets:
+      - name: ghcr-secret
       containers:
       - name: nginx
         image: ghcr.io/jpalenz77/gamehub-cdn:latest
-        imagePullPolicy: Never
+        imagePullPolicy: Always
         ports:
         - containerPort: 8080
           name: http

@@ -19,10 +19,12 @@ spec:
         app: frontend
         tier: presentation
     spec:
+      imagePullSecrets:
+      - name: ghcr-secret
       containers:
       - name: frontend
         image: ghcr.io/jpalenz77/gamehub-frontend-production:latest
-        imagePullPolicy: Never
+        imagePullPolicy: Always
         ports:
         - containerPort: 8081
           name: http
