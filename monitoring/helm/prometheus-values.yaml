@@ -169,9 +169,7 @@ grafana:
       labelValue: "1"
       searchNamespace: ALL
     datasources:
-      enabled: true
-      label: grafana_datasource
-      labelValue: "1"
+      enabled: false
 
 # Prometheus configuration
 prometheus:
