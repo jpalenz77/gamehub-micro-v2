@@ -34,9 +34,7 @@
 
   <script>
     // API Gateway URL (Kong)
-    const API = window.location.hostname === 'localhost' 
-      ? "http://localhost:8000/api" 
-      : "https://api.gamehub.example.com/api";
+    const API = "http://localhost:8000";
 
     function toggleForm() {
       document.getElementById("login").style.display =
@@ -50,7 +48,7 @@
       const password = document.getElementById("password").value;
       
       try {
-        const res = await fetch(`${API}/auth/login`, {
+        const res = await fetch(`${API}/login`, {
           method: "POST",
           headers: {"Content-Type":"application/json"},
           body: JSON.stringify({username, password})
@@ -78,7 +76,7 @@
       const password = document.getElementById("newPassword").value;
       
       try {
-        const res = await fetch(`${API}/auth/register`, {
+        const res = await fetch(`${API}/register`, {
           method: "POST",
           headers: {"Content-Type":"application/json"},
           body: JSON.stringify({username, password})

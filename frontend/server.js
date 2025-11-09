@@ -25,6 +25,11 @@ app.use(express.static(__dirname));
 // Esto permite que el path relativo '../juegos/...' funcione correctamente.
 app.use('/juegos', express.static(path.join(projectRoot, 'juegos')));
 
+// Health check endpoint para Kubernetes
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
+
 const PORT = 8081;
 app.listen(PORT, () => {
   console.log(`🎮 Frontend corriendo en http://localhost:${PORT}`);

@@ -112,10 +112,10 @@
     </section>
 
     <script>
-        // API Gateway URL (Kong)
-        const API = window.location.hostname === 'localhost' 
-          ? "http://localhost:8000/api" 
-          : "https://api.gamehub.example.com/api";
+        // API URLs
+        const API = "http://localhost:8000"; // auth-service
+        const SCORE_API = "http://localhost:8003"; // score-service
+        const RANKING_API = "http://localhost:8004"; // ranking-service
         
         let accessToken = localStorage.getItem("accessToken");
         const refreshToken = localStorage.getItem("refreshToken");
@@ -144,7 +144,7 @@
             if (!refreshToken) return false;
             
             try {
-                const res = await fetch(`${API}/auth/refresh`, {
+                const res = await fetch(`${API}/refresh`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ refreshToken })
@@ -228,7 +228,7 @@
             }
 
             try {
-                const res = await fetch(`${API}/scores`, {
+                const res = await fetch(`${SCORE_API}/`, {
                     method: "POST",
                     headers: {
                         "Content-Type":"application/json",
@@ -271,7 +271,7 @@
         async function loadRanking(game) {
             try {
                 currentRankingGame = game;
-                const res = await fetch(`${API}/rankings/games/${game}`);
+                const res = await fetch(`${RANKING_API}/games/${game}`);
                 const data = await res.json();
                 
                 const title = JUEGOS_TITULOS[game] || game.toUpperCase();
@@ -306,7 +306,7 @@
                 }
             } catch (err) {
                 console.error("Error al cargar ranking:", err);
-                rankingBody.innerHTML = '<tr><td colspan="4">Error al cargar el ranking</td></tr>';
+                rankingBody.innerHTML = '<tr><td colspan="4">Servicio de rankings no disponible</td></tr>';
             }
         }
 
@@ -365,9 +365,8 @@
             loader.textContent = `Cargando ${game.toUpperCase()}...`;
             
             // CDN URLs - games-cdn sirve los archivos .jsdos
-            const CDN_URL = window.location.hostname === 'localhost' 
-                ? 'http://localhost:8086/juegos' 
-                : '/juegos';
+            // En Kubernetes los juegos están dentro del contenedor
+            const CDN_URL = '/juegos';
             
             const JUEGOS_RUTAS = {
                 "doom": `${CDN_URL}/doom.jsdos`,

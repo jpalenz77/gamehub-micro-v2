@@ -187,6 +187,214 @@ REDIS_PORT=6379
 
 ---
 
+---
+
+## ☸️ Kubernetes Deployment
+
+GameHub incluye soporte completo para Kubernetes con:
+- **HPA (Horizontal Pod Autoscaler)**: Escalado automático de 1-10 réplicas por juego
+- **10 deployments independientes**: Un deployment por cada juego
+- **Métricas**: metrics-server para HPA basado en CPU/memoria
+- **Health checks**: Liveness y readiness probes
+- **Resource limits**: CPU y memoria controlados
+
+### Prerrequisitos para Kubernetes
+
+- Minikube 1.30+ o cualquier cluster de Kubernetes
+- kubectl configurado
+- 8GB RAM y 4 CPUs recomendados para Minikube
+- Docker para construir imágenes
+
+### Inicio Rápido con Minikube
+
+```bash
+# 1. Iniciar Minikube
+minikube start --memory=8192 --cpus=4
+
+# 2. Habilitar addons necesarios
+minikube addons enable metrics-server
+minikube addons enable ingress
+
+# 3. Configurar Docker para usar el daemon de Minikube
+eval $(minikube docker-env)
+
+# 4. Construir imágenes
+cd /mnt/c/tests/gamehub
+docker build -f frontend/Dockerfile.k8s -t gamehub-frontend-full:latest .
+docker build -f services/auth-service/Dockerfile -t gamehub-auth-service:latest services/auth-service/
+docker build -f services/score-service/Dockerfile -t gamehub-score-service:latest services/score-service/
+docker build -f services/ranking-service/Dockerfile -t gamehub-ranking-service:latest services/ranking-service/
+
+# 5. Crear namespace
+kubectl create namespace gamehub
+
+# 6. Desplegar servicios backend (PostgreSQL, Redis, Auth, Score, Ranking)
+kubectl apply -f infrastructure/kubernetes/games/backend-services.yaml
+
+# 7. Generar deployments de juegos
+cd infrastructure/kubernetes/games
+chmod +x generate-game-deployments.sh
+./generate-game-deployments.sh
+
+# 8. Desplegar los 10 juegos
+kubectl apply -f deployments/
+
+# 9. Verificar que todos los pods estén corriendo
+kubectl get pods -n gamehub
+```
+
+### Acceso a los Servicios
+
+Opción 1: **Port Forwards** (desarrollo local)
+
+```bash
+# Terminal 1: Frontend
+kubectl port-forward -n gamehub svc/doom-game-service 8081:8081
+
+# Terminal 2: Auth Service
+kubectl port-forward -n gamehub svc/auth-service 8000:3001
+
+# Terminal 3: Score Service
+kubectl port-forward -n gamehub svc/score-service 8003:3003
+
+# Terminal 4: Ranking Service
+kubectl port-forward -n gamehub svc/ranking-service 8004:3004
+```
+
+Luego accede a: http://localhost:8081
+
+Opción 2: **NodePort** (Minikube)
+
+```bash
+# Obtener URL del servicio
+minikube service doom-game-service -n gamehub --url
+```
+
+Opción 3: **Ingress** (producción)
+
+```bash
+# Aplicar ingress
+kubectl apply -f infrastructure/kubernetes/games/simple-ingress.yaml
+
+# Agregar a /etc/hosts
+echo "$(minikube ip) gamehub.local" | sudo tee -a /etc/hosts
+
+# Acceder
+http://gamehub.local
+```
+
+### Arquitectura de Kubernetes
+
+```
+gamehub namespace
+├── Backend Services
+│   ├── postgres-auth (PostgreSQL 15)
+│   ├── redis (Redis 7)
+│   ├── auth-service (Node.js)
+│   ├── score-service (Node.js)
+│   └── ranking-service (Node.js)
+│
+└── Game Deployments (10 total)
+    ├── doom-game (HPA: 1-10 replicas)
+    ├── wolf-game (HPA: 1-10 replicas)
+    ├── tetris-game (HPA: 1-10 replicas)
+    ├── mortalkombat-game (HPA: 1-10 replicas)
+    ├── dangerousdave2-game (HPA: 1-10 replicas)
+    ├── digger-game (HPA: 1-10 replicas)
+    ├── dukenukem3d-game (HPA: 1-10 replicas)
+    ├── heroesofmightandmagic2-game (HPA: 1-10 replicas)
+    ├── lostvikings-game (HPA: 1-10 replicas)
+    └── streetfighter2-game (HPA: 1-10 replicas)
+```
+
+### HPA (Horizontal Pod Autoscaler)
+
+Cada juego tiene configurado:
+- **Min replicas**: 1
+- **Max replicas**: 10
+- **Métricas**: CPU 70%, Memoria 80%
+- **Scale up**: Inmediato (100% o 2 pods cada 15s)
+- **Scale down**: 5 minutos de estabilización (máx 50% cada 60s)
+
+```bash
+# Ver estado de HPA
+kubectl get hpa -n gamehub
+
+# Ver en tiempo real
+kubectl get hpa -n gamehub -w
+```
+
+### Monitoreo y Testing
+
+```bash
+# Ver todos los pods
+kubectl get pods -n gamehub
+
+# Ver logs de un pod
+kubectl logs -f -n gamehub <pod-name>
+
+# Ejecutar monitor en tiempo real
+cd infrastructure/kubernetes/games
+./monitor-games.sh
+
+# Generar carga para probar HPA
+./load-test.sh
+```
+
+### Comandos Útiles de Kubernetes
+
+```bash
+# Ver estado de todos los recursos
+kubectl get all -n gamehub
+
+# Describir un pod
+kubectl describe pod <pod-name> -n gamehub
+
+# Ejecutar comando en un pod
+kubectl exec -it -n gamehub <pod-name> -- /bin/sh
+
+# Ver logs de múltiples pods
+kubectl logs -f -n gamehub -l app=doom-game
+
+# Reiniciar un deployment
+kubectl rollout restart deployment/doom-game -n gamehub
+
+# Ver historial de rollout
+kubectl rollout history deployment/doom-game -n gamehub
+
+# Escalar manualmente
+kubectl scale deployment doom-game -n gamehub --replicas=5
+
+# Ver métricas de recursos
+kubectl top nodes
+kubectl top pods -n gamehub
+```
+
+### Limpieza de Kubernetes
+
+```bash
+# Eliminar todo el namespace (cuidado!)
+kubectl delete namespace gamehub
+
+# Eliminar deployments específicos
+kubectl delete -f infrastructure/kubernetes/games/deployments/
+
+# Eliminar servicios backend
+kubectl delete -f infrastructure/kubernetes/games/backend-services.yaml
+```
+
+### Detalles Técnicos
+
+Ver [infrastructure/kubernetes/games/README.md](infrastructure/kubernetes/games/README.md) para:
+- Configuración detallada de HPA
+- Troubleshooting de Kubernetes
+- Scripts de automatización
+- Arquitectura de red y volúmenes
+
+---
+
+## 🐳 Docker Compose (Desarrollo Local)
+
 ## 🐳 Kubernetes (Opcional)
 
 El proyecto incluye manifiestos de Kubernetes en `infrastructure/kubernetes/`:
