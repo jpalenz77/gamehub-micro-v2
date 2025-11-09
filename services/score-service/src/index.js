@@ -6,7 +6,7 @@ import { initDatabase } from './config/database.js';
 import { connectRedis } from './events/eventPublisher.js';
 import scoreController from './controllers/scoreController.js';
 import { authenticateToken } from './middleware/authMiddleware.js';
-import { register, collectDefaultMetrics } from 'prom-client';
+import { register, collectDefaultMetrics, Counter, Gauge } from 'prom-client';
 
 dotenv.config();
 
@@ -14,6 +14,21 @@ const app = express();
 const PORT = process.env.PORT || 3003;
 
 collectDefaultMetrics({ register });
+
+// Custom metrics
+export const scoreSubmissionsTotal = new Counter({
+  name: 'score_submissions_total',
+  help: 'Total number of score submissions',
+  labelNames: ['game', 'username'],
+  registers: [register]
+});
+
+export const lastScoreValue = new Gauge({
+  name: 'last_score_value',
+  help: 'Last score submitted by user',
+  labelNames: ['game', 'username', 'user_id'],
+  registers: [register]
+});
 
 app.use(helmet());
 app.use(cors());
@@ -33,7 +48,7 @@ app.post('/', authenticateToken, (req, res) => scoreController.createScore(req, 
 app.get('/user/:userId', authenticateToken, (req, res) => scoreController.getUserScores(req, res));
 app.get('/user/:userId/game/:game', authenticateToken, (req, res) => scoreController.getUserScoreForGame(req, res));
 
-app.use((err, req, res, next) => {
+app.use((err, req, res, _next) => {
   console.error('Error:', err);
   res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
 });

@@ -78,7 +78,7 @@ export class AuthService {
   async refreshToken(refreshToken) {
     try {
       // Verify refresh token
-      const decoded = jwt.verify(refreshToken, JWT_SECRET);
+      jwt.verify(refreshToken, JWT_SECRET);
 
       // Check if token is blacklisted
       const isBlacklisted = await redisClient.get(`blacklist:${refreshToken}`);

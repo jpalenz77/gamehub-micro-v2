@@ -23,7 +23,7 @@ export class ScoreRepository {
       // Update score
       const updateQuery = `
         UPDATE scores
-        SET score = $2, updated_at = CURRENT_TIMESTAMP
+        SET score = $2
         WHERE id = $1
         RETURNING *
       `;

@@ -44,7 +44,7 @@ export class CacheService {
     try {
       if (Array.isArray(keys)) {
         await redisClient.del(keys);
-        console.log(`🗑️ Invalidated cache keys:`, keys);
+        console.log('🗑️ Invalidated cache keys:', keys);
       } else {
         await redisClient.del(keys);
         console.log(`🗑️ Invalidated cache key: ${keys}`);

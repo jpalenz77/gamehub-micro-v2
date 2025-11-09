@@ -11,6 +11,7 @@ export async function startCacheInvalidationListener() {
 
   // Listen for cache.invalidate events
   const consumeInvalidations = async () => {
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       try {
         const result = await redisClient.brPop('events:cache.invalidate', 0);
