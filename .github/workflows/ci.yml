@@ -275,7 +275,7 @@ jobs:
           }
           
           echo "=== Testing Kong health ==="
-          kubectl exec test-pod -n gamehub -- curl -f http://kong:8000/ || {
+          kubectl exec test-pod -n gamehub -- curl -f http://kong:8001/status || {
             echo "Kong health check failed"
             kubectl logs deployment/kong -n gamehub --tail=50
             exit 1
