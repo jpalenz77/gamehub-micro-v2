@@ -23,13 +23,13 @@ spec:
     spec:
       containers:
       - name: tetris-container
-        image: gamehub-frontend:latest
+        image: gamehub-frontend-tetris:latest
         imagePullPolicy: Never  # Para Minikube usa imágenes locales
         ports:
         - containerPort: 8081
           name: http
         env:
-        - name: tetris
+        - name: GAME_NAME
           value: "tetris"
         - name: NODE_ENV
           value: "production"

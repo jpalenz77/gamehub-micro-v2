@@ -23,13 +23,13 @@ spec:
     spec:
       containers:
       - name: lostvikings-container
-        image: gamehub-frontend:latest
+        image: gamehub-frontend-lostvikings:latest
         imagePullPolicy: Never  # Para Minikube usa imágenes locales
         ports:
         - containerPort: 8081
           name: http
         env:
-        - name: lostvikings
+        - name: GAME_NAME
           value: "lostvikings"
         - name: NODE_ENV
           value: "production"

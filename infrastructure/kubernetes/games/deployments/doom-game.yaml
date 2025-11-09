@@ -23,13 +23,13 @@ spec:
     spec:
       containers:
       - name: doom-container
-        image: gamehub-frontend:latest
-        imagePullPolicy: Never  # Para Minikube usa imágenes locales
+        image: gamehub-frontend-doom:latest
+        imagePullPolicy: Never  # Para Minikube usa imágenes locales (cambiar a IfNotPresent para AWS EKS)
         ports:
         - containerPort: 8081
           name: http
         env:
-        - name: doom
+        - name: GAME_NAME
           value: "doom"
         - name: NODE_ENV
           value: "production"

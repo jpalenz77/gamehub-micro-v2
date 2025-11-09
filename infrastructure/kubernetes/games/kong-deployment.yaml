@@ -13,7 +13,13 @@ data:
         routes:
           - name: auth-routes
             paths:
-              - /
+              - /login
+              - /register
+              - /refresh
+              - /logout
+              - /verify
+              - /me
+              - /health
             strip_path: false
             methods:
               - GET
@@ -142,6 +148,10 @@ spec:
           value: "0.0.0.0:8001"
         - name: KONG_PROXY_LISTEN
           value: "0.0.0.0:8000"
+        - name: KONG_MEM_CACHE_SIZE
+          value: "64m"
+        - name: KONG_NGINX_WORKER_PROCESSES
+          value: "1"
         ports:
         - containerPort: 8000
           name: proxy
@@ -152,11 +162,11 @@ spec:
           mountPath: /etc/kong
         resources:
           requests:
-            cpu: 100m
-            memory: 128Mi
+            cpu: 200m
+            memory: 256Mi
           limits:
-            cpu: 500m
-            memory: 512Mi
+            cpu: 1000m
+            memory: 1Gi
         livenessProbe:
           httpGet:
             path: /status

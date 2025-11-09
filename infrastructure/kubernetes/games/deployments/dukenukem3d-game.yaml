@@ -23,13 +23,13 @@ spec:
     spec:
       containers:
       - name: dukenukem3d-container
-        image: gamehub-frontend:latest
+        image: gamehub-frontend-duke3d:latest
         imagePullPolicy: Never  # Para Minikube usa imágenes locales
         ports:
         - containerPort: 8081
           name: http
         env:
-        - name: dukenukem3d
+        - name: GAME_NAME
           value: "dukenukem3d"
         - name: NODE_ENV
           value: "production"

@@ -23,13 +23,13 @@ spec:
     spec:
       containers:
       - name: wolf-container
-        image: gamehub-frontend:latest
+        image: gamehub-frontend-wolf:latest
         imagePullPolicy: Never  # Para Minikube usa imágenes locales
         ports:
         - containerPort: 8081
           name: http
         env:
-        - name: wolf
+        - name: GAME_NAME
           value: "wolf"
         - name: NODE_ENV
           value: "production"

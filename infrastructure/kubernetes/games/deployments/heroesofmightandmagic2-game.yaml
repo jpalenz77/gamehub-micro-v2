@@ -23,13 +23,13 @@ spec:
     spec:
       containers:
       - name: heroesofmightandmagic2-container
-        image: gamehub-frontend:latest
+        image: gamehub-frontend-heroesofmightandmagic2:latest
         imagePullPolicy: Never  # Para Minikube usa imágenes locales
         ports:
         - containerPort: 8081
           name: http
         env:
-        - name: heroesofmightandmagic2
+        - name: GAME_NAME
           value: "heroesofmightandmagic2"
         - name: NODE_ENV
           value: "production"

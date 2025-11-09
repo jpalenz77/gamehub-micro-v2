@@ -23,13 +23,13 @@ spec:
     spec:
       containers:
       - name: dangerousdave2-container
-        image: gamehub-frontend:latest
+        image: gamehub-frontend-dangerousdave2:latest
         imagePullPolicy: Never  # Para Minikube usa imágenes locales
         ports:
         - containerPort: 8081
           name: http
         env:
-        - name: dangerousdave2
+        - name: GAME_NAME
           value: "dangerousdave2"
         - name: NODE_ENV
           value: "production"

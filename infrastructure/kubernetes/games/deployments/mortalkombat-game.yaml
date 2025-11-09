@@ -23,13 +23,13 @@ spec:
     spec:
       containers:
       - name: mortalkombat-container
-        image: gamehub-frontend:latest
+        image: gamehub-frontend-mortalkombat:latest
         imagePullPolicy: Never  # Para Minikube usa imágenes locales
         ports:
         - containerPort: 8081
           name: http
         env:
-        - name: mortalkombat
+        - name: GAME_NAME
           value: "mortalkombat"
         - name: NODE_ENV
           value: "production"

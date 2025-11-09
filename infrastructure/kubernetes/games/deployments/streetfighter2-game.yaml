@@ -23,13 +23,13 @@ spec:
     spec:
       containers:
       - name: streetfighter2-container
-        image: gamehub-frontend:latest
+        image: gamehub-frontend-streetfighter2:latest
         imagePullPolicy: Never  # Para Minikube usa imágenes locales
         ports:
         - containerPort: 8081
           name: http
         env:
-        - name: streetfighter2
+        - name: GAME_NAME
           value: "streetfighter2"
         - name: NODE_ENV
           value: "production"

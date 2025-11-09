@@ -1,45 +1,43 @@
-# Template para Deployments de juegos individuales
-# Cada juego tendrá su propio deployment escalable
+# Production-ready Frontend Deployment
+# Single deployment serving all games through dynamic loading
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: digger-game
+  name: frontend
   namespace: gamehub
   labels:
-    app: digger-game
-    tier: frontend
-    game: digger
+    app: frontend
+    tier: presentation
 spec:
-  replicas: 1  # Mínimo inicial, HPA escalará automáticamente
+  replicas: 2  # Start with 2 for HA
   selector:
     matchLabels:
-      app: digger-game
+      app: frontend
   template:
     metadata:
       labels:
-        app: digger-game
-        tier: frontend
-        game: digger
+        app: frontend
+        tier: presentation
     spec:
       containers:
-      - name: digger-container
-        image: gamehub-frontend-digger:latest
-        imagePullPolicy: Never  # Para Minikube usa imágenes locales
+      - name: frontend
+        image: gamehub-frontend-production:latest
+        imagePullPolicy: Never
         ports:
         - containerPort: 8081
           name: http
         env:
-        - name: GAME_NAME
-          value: "digger"
         - name: NODE_ENV
           value: "production"
+        - name: CDN_URL
+          value: "http://cdn-service:8080"  # CDN interno para .jsdos
         resources:
           requests:
-            cpu: 100m      # 0.1 CPU core
-            memory: 128Mi   # 128 MB RAM
+            cpu: 100m
+            memory: 128Mi
           limits:
-            cpu: 500m      # 0.5 CPU core máximo
-            memory: 512Mi   # 512 MB RAM máximo
+            cpu: 500m
+            memory: 512Mi
         livenessProbe:
           httpGet:
             path: /health
@@ -56,7 +54,6 @@ spec:
           periodSeconds: 5
           timeoutSeconds: 3
           failureThreshold: 2
-      # Afinidad de pods para mejor distribución en nodos
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -67,65 +64,66 @@ spec:
                 - key: app
                   operator: In
                   values:
-                  - digger-game
+                  - frontend
               topologyKey: kubernetes.io/hostname
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: digger-game-service
+  name: frontend-service
   namespace: gamehub
   labels:
-    app: digger-game
+    app: frontend
 spec:
   type: ClusterIP
+  selector:
+    app: frontend
   ports:
   - port: 8081
     targetPort: 8081
     protocol: TCP
     name: http
-  selector:
-    app: digger-game
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: digger-game-hpa
+  name: frontend-hpa
   namespace: gamehub
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: digger-game
-  minReplicas: 1
-  maxReplicas: 10
+    name: frontend
+  minReplicas: 2
+  maxReplicas: 20  # Más alto porque maneja TODO el tráfico
   metrics:
   - type: Resource
     resource:
       name: cpu
       target:
         type: Utilization
-        averageUtilization: 70  # Escalar cuando CPU > 70%
+        averageUtilization: 70
   - type: Resource
     resource:
       name: memory
       target:
         type: Utilization
-        averageUtilization: 80  # Escalar cuando memoria > 80%
+        averageUtilization: 80
   behavior:
-    scaleDown:
-      stabilizationWindowSeconds: 300  # Esperar 5 min antes de escalar hacia abajo
-      policies:
-      - type: Percent
-        value: 50  # Reducir máximo 50% de pods a la vez
-        periodSeconds: 60
     scaleUp:
-      stabilizationWindowSeconds: 0  # Escalar hacia arriba inmediatamente
+      stabilizationWindowSeconds: 0
       policies:
       - type: Percent
-        value: 100  # Duplicar pods si es necesario
+        value: 100
         periodSeconds: 15
       - type: Pods
-        value: 2  # O añadir 2 pods
+        value: 4
         periodSeconds: 15
-      selectPolicy: Max  # Usar la política más agresiva
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      selectPolicy: Min
