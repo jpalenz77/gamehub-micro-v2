@@ -36,7 +36,7 @@ jobs:
           version: 'v1.28.0'
 
       - name: Configure AWS credentials (if using EKS)
-        if: secrets.AWS_ACCESS_KEY_ID != ''
+        if: ${{ vars.USE_AWS_EKS == 'true' }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -44,7 +44,7 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
 
       - name: Update kubeconfig for EKS
-        if: secrets.AWS_ACCESS_KEY_ID != ''
+        if: ${{ vars.USE_AWS_EKS == 'true' }}
         run: |
           aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }} --region ${{ secrets.AWS_REGION }}
 
