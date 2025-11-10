@@ -601,7 +601,6 @@ minikube addons enable metrics-server
 
 ## 👨‍💻 Autor
 
-**Juan Pablo Alenza**
 - GitHub: [@jpalenz77](https://github.com/jpalenz77)
 - Proyecto: [gamehub_micro](https://github.com/jpalenz77/gamehub_micro)
 
