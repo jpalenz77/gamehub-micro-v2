@@ -114,7 +114,7 @@ spec:
       - name: ghcr-secret
       containers:
       - name: auth-service
-        image: ghcr.io/jpalenz77/gamehub-auth-service:latest
+        image: ghcr.io/jpalenz77/gamehub-micro-v2-auth-service:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 3001
@@ -180,7 +180,7 @@ spec:
       - name: ghcr-secret
       containers:
       - name: ranking-service
-        image: ghcr.io/jpalenz77/gamehub-ranking-service:latest
+        image: ghcr.io/jpalenz77/gamehub-micro-v2-ranking-service:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 3004
@@ -246,7 +246,7 @@ spec:
       - name: ghcr-secret
       containers:
       - name: score-service
-        image: ghcr.io/jpalenz77/gamehub-score-service:latest
+        image: ghcr.io/jpalenz77/gamehub-micro-v2-score-service:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 3003

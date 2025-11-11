@@ -94,7 +94,7 @@ spec:
       - name: ghcr-secret
       containers:
       - name: nginx
-        image: ghcr.io/jpalenz77/gamehub-cdn:latest
+        image: ghcr.io/jpalenz77/gamehub-micro-v2-cdn:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
