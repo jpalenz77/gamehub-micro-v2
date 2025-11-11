@@ -4,6 +4,8 @@
 
 GameHub es una plataforma de juegos retro basada en microservicios que permite a los usuarios jugar juegos clásicos de DOS, guardar puntuaciones y competir en rankings globales.
 
+[![CI - Tests and Build](https://github.com/jpalenz77/gamehub-micro-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/jpalenz77/gamehub-micro-v2/actions/workflows/ci.yml)
+
 ---
 
 ## 🏗️ Arquitectura
