@@ -113,9 +113,9 @@
 
     <script>
         // API URLs - All through Kong Gateway
-        const API = "http://localhost:8000"; // auth-service through Kong
-        const SCORE_API = "http://localhost:8000/scores"; // score-service through Kong
-        const RANKING_API = "http://localhost:8000/rankings"; // ranking-service through Kong
+        const API = "http://localhost:8000/api/auth"; // auth-service through Kong
+        const SCORE_API = "http://localhost:8000/api/scores"; // score-service through Kong
+        const RANKING_API = "http://localhost:8000/api/rankings"; // ranking-service through Kong
         
         let accessToken = localStorage.getItem("accessToken");
         const refreshToken = localStorage.getItem("refreshToken");
@@ -364,9 +364,9 @@
             
             loader.textContent = `Cargando ${game.toUpperCase()}...`;
             
-            // CDN URLs - Para testing local, usar puerto 8083 (port-forward del CDN)
+            // CDN URLs - Para testing local con docker-compose, usar puerto 8086
             // En producción con Ingress, sería: https://cdn.gamehub.com
-            const CDN_URL = window.CDN_URL || 'http://localhost:8083';
+            const CDN_URL = window.CDN_URL || 'http://localhost:8086/juegos';
             
             const JUEGOS_RUTAS = {
                 "doom": `${CDN_URL}/doom.jsdos`,
